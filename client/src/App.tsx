@@ -29,7 +29,6 @@ export default function App() {
       createdAt: new Date(),
     };
 
-    // Prepare history snapshot: all prior messages + the current user message
     const historyPayload: HistoryMessagePayload[] = [
       ...messages.map((msg) => ({
         role: msg.role,
@@ -41,8 +40,17 @@ export default function App() {
       },
     ];
 
-    // Optimistically update UI
-    setMessages((prev) => [...prev, userMessage]);
+    // Placeholder message for streaming tokens
+    const assistantMessageId = crypto.randomUUID();
+    const assistantMessage: ChatMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date(),
+    };
+
+    // Optimistically update both user message and empty assistant bubble
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setIsLoading(true);
 
     try {
@@ -56,25 +64,46 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch response from server.');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error status: ${response.status}`);
       }
 
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: data.reply,
-        createdAt: new Date(),
-      };
+      if (!response.body) {
+        throw new Error('ReadableStream not supported by browser or response has no body.');
+      }
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let done = false;
+
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        done = streamDone;
+
+        if (value) {
+          const chunkText = decoder.decode(value, { stream: true });
+          
+          // Incrementally append chunk to the target assistant message
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: msg.content + chunkText }
+                : msg
+            )
+          );
+        }
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'An unexpected error occurred.';
       console.error('Chat error:', err);
       setErrorMessage(message);
+
+      // Clean up empty placeholder if failed before stream started
+      setMessages((prev) =>
+        prev.filter((msg) => !(msg.id === assistantMessageId && msg.content === ''))
+      );
     } finally {
       setIsLoading(false);
     }
@@ -84,14 +113,14 @@ export default function App() {
     <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.title}>Gemini Chat Assistant</h1>
-        <p style={styles.subtitle}>Full-stack MERN & LLM Practice (Memory Enabled)</p>
+        <p style={styles.subtitle}>Streaming & Multi-turn Enabled</p>
       </header>
 
       <main style={styles.chatArea}>
         {messages.length === 0 ? (
           <div style={styles.emptyState}>
-            <h3>No messages yet</h3>
-            <p>Tell me something, then ask me to recall it in a follow-up!</p>
+            <h3>Ready when you are</h3>
+            <p>Ask a complex question to see real-time streaming in action!</p>
           </div>
         ) : (
           messages.map((msg) => (
@@ -112,19 +141,12 @@ export default function App() {
                 <div style={styles.roleLabel}>
                   {msg.role === 'user' ? 'You' : 'Gemini'}
                 </div>
-                <div style={styles.messageContent}>{msg.content}</div>
+                <div style={styles.messageContent}>
+                  {msg.content || (isLoading && msg.role === 'assistant' ? '▋' : '')}
+                </div>
               </div>
             </div>
           ))
-        )}
-
-        {isLoading && (
-          <div style={{ ...styles.messageRow, justifyContent: 'flex-start' }}>
-            <div style={{ ...styles.bubble, backgroundColor: '#2a2b32', color: '#a0a0a0' }}>
-              <div style={styles.roleLabel}>Gemini</div>
-              <div style={styles.thinking}>Thinking...</div>
-            </div>
-          </div>
         )}
 
         {errorMessage && (
@@ -154,7 +176,7 @@ export default function App() {
             cursor: isLoading || !inputPrompt.trim() ? 'not-allowed' : 'pointer',
           }}
         >
-          {isLoading ? '...' : 'Send'}
+          {isLoading ? 'Streaming...' : 'Send'}
         </button>
       </form>
     </div>
@@ -229,10 +251,6 @@ const styles: { [key: string]: React.CSSProperties } = {
   messageContent: {
     fontSize: '0.95rem',
     whiteSpace: 'pre-wrap',
-  },
-  thinking: {
-    fontStyle: 'italic',
-    fontSize: '0.9rem',
   },
   errorBanner: {
     padding: '10px 16px',

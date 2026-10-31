@@ -22,7 +22,6 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'Backend is running smoothly' });
 });
 
-// Incoming message contract from client
 interface IncomingMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -38,7 +37,6 @@ app.post(
     try {
       const { messages } = req.body;
 
-      // 1. Strict validation: Ensure messages is a non-empty array
       if (!Array.isArray(messages) || messages.length === 0) {
         res.status(400).json({
           error: 'Bad Request: "messages" must be a non-empty array.',
@@ -46,7 +44,6 @@ app.post(
         return;
       }
 
-      // 2. Validate individual items in the conversation
       const isValid = messages.every(
         (m) =>
           (m.role === 'user' || m.role === 'assistant') &&
@@ -61,15 +58,19 @@ app.post(
         return;
       }
 
-      // 3. Map application roles to Gemini SDK format
-      // In Gemini: 'user' stays 'user', 'assistant' maps to 'model'
       const formattedContents = messages.map((msg) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content.trim() }],
       }));
 
-      // 4. Generate content with full multi-turn context
-      const response = await ai.models.generateContent({
+      // Set streaming headers
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Transfer-Encoding', 'chunked');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+
+      // Request stream from Gemini 3.5 Flash
+      const responseStream = await ai.models.generateContentStream({
         model: 'gemini-3.5-flash',
         contents: formattedContents,
         config: {
@@ -78,21 +79,28 @@ app.post(
         },
       });
 
-      const replyText = response.text;
-
-      if (!replyText) {
-        res.status(502).json({
-          error: 'Bad Gateway: Empty response returned from LLM provider.',
-        });
-        return;
+      // Stream each generated token chunk to the client
+      for await (const chunk of responseStream) {
+        const text = chunk.text;
+        if (text) {
+          res.write(text);
+        }
       }
 
-      res.status(200).json({ reply: replyText.trim() });
+      // Finalize the HTTP stream
+      res.end();
     } catch (error: any) {
-      console.error('Error generating AI content:', error?.message || error);
-      res.status(500).json({
-        error: error?.message || 'Internal Server Error: Failed to generate response.',
-      });
+      console.error('Streaming error:', error?.message || error);
+
+      // If headers haven't sent, we can still send a structured 500 JSON
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: error?.message || 'Internal Server Error: Failed to generate response.',
+        });
+      } else {
+        // If the stream already started, terminate cleanly
+        res.end();
+      }
     }
   }
 );
