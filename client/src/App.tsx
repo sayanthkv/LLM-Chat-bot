@@ -1,5 +1,7 @@
+// client/src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, ConversationSummary } from './types';
+import { ResumeExtractor } from './components/ResumeExtractor';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { 
   Sparkles, 
@@ -11,10 +13,12 @@ import {
   PanelLeft, 
   AlertCircle,
   Bot,
-  User
+  User,
+  FileCheck2
 } from 'lucide-react';
 
 export default function App() {
+  const [viewMode, setViewMode] = useState<'chat' | 'extractor'>('chat');
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -27,8 +31,10 @@ export default function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+    if (viewMode === 'chat') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isLoading, viewMode]);
 
   useEffect(() => {
     fetchConversations();
@@ -55,6 +61,7 @@ export default function App() {
 
   const handleSelectConversation = async (id: string) => {
     if (isLoading || id === activeConversationId) return;
+    setViewMode('chat');
     setActiveConversationId(id);
     setErrorMessage(null);
 
@@ -78,6 +85,7 @@ export default function App() {
 
   const handleNewChat = () => {
     if (isLoading) return;
+    setViewMode('chat');
     setActiveConversationId(null);
     setMessages([]);
     setErrorMessage(null);
@@ -227,7 +235,7 @@ export default function App() {
         <div style={styles.sidebarHeader}>
           <div style={styles.brandTitle}>
             <Sparkles size={18} color="#10b981" />
-            <span>Chat Console</span>
+            <span>AI Workspace</span>
           </div>
           <button
             onClick={() => setIsSidebarOpen(false)}
@@ -238,172 +246,216 @@ export default function App() {
           </button>
         </div>
 
-        <button onClick={handleNewChat} style={styles.newChatBtn} disabled={isLoading}>
-          <Plus size={16} />
-          <span>New Chat</span>
-        </button>
-
-        <div style={styles.convList}>
-          {conversations.length === 0 ? (
-            <div style={styles.emptySidebar}>No conversations yet</div>
-          ) : (
-            conversations.map((conv) => {
-              const isActive = conv._id === activeConversationId;
-              return (
-                <div
-                  key={conv._id}
-                  onClick={() => handleSelectConversation(conv._id)}
-                  style={{
-                    ...styles.convItem,
-                    backgroundColor: isActive ? '#1e232d' : 'transparent',
-                    borderColor: isActive ? '#2d3748' : 'transparent',
-                  }}
-                >
-                  <MessageSquare size={15} color={isActive ? '#10b981' : '#6b7280'} />
-                  <span style={{ ...styles.convTitle, color: isActive ? '#f3f4f6' : '#9ca3af' }}>
-                    {conv.title || 'Untitled Session'}
-                  </span>
-                  <button
-                    onClick={(e) => handleDeleteConversation(e, conv._id)}
-                    title="Delete conversation"
-                    style={styles.deleteBtn}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              );
-            })
-          )}
+        {/* View Switcher Tabs */}
+        <div style={styles.tabSwitcher}>
+          <button
+            onClick={() => setViewMode('chat')}
+            style={{
+              ...styles.tabBtn,
+              backgroundColor: viewMode === 'chat' ? '#102a20' : '#14171d',
+              borderColor: viewMode === 'chat' ? '#10b981' : '#232833',
+              color: viewMode === 'chat' ? '#34d399' : '#9ca3af',
+            }}
+          >
+            <MessageSquare size={14} />
+            <span>Chat</span>
+          </button>
+          <button
+            onClick={() => setViewMode('extractor')}
+            style={{
+              ...styles.tabBtn,
+              backgroundColor: viewMode === 'extractor' ? '#102a20' : '#14171d',
+              borderColor: viewMode === 'extractor' ? '#10b981' : '#232833',
+              color: viewMode === 'extractor' ? '#34d399' : '#9ca3af',
+            }}
+          >
+            <FileCheck2 size={14} />
+            <span>Extractor</span>
+          </button>
         </div>
+
+        {viewMode === 'chat' ? (
+          <>
+            <button onClick={handleNewChat} style={styles.newChatBtn} disabled={isLoading}>
+              <Plus size={16} />
+              <span>New Chat</span>
+            </button>
+
+            <div style={styles.convList}>
+              {conversations.length === 0 ? (
+                <div style={styles.emptySidebar}>No conversations yet</div>
+              ) : (
+                conversations.map((conv) => {
+                  const isActive = conv._id === activeConversationId;
+                  return (
+                    <div
+                      key={conv._id}
+                      onClick={() => handleSelectConversation(conv._id)}
+                      style={{
+                        ...styles.convItem,
+                        backgroundColor: isActive ? '#1e232d' : 'transparent',
+                        borderColor: isActive ? '#2d3748' : 'transparent',
+                      }}
+                    >
+                      <MessageSquare size={15} color={isActive ? '#10b981' : '#6b7280'} />
+                      <span style={{ ...styles.convTitle, color: isActive ? '#f3f4f6' : '#9ca3af' }}>
+                        {conv.title || 'Untitled Session'}
+                      </span>
+                      <button
+                        onClick={(e) => handleDeleteConversation(e, conv._id)}
+                        title="Delete conversation"
+                        style={styles.deleteBtn}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={styles.extractorInfoBox}>
+            <p style={styles.extractorInfoText}>
+              Paste messy resume text to extract candidate contact info, skills, experience, and education validated with Zod.
+            </p>
+          </div>
+        )}
       </aside>
 
-      {/* Main Chat Panel */}
+      {/* Main Content Panel */}
       <div style={styles.mainContainer}>
-        {/* Top Navbar */}
-        <header style={styles.navbar}>
-          <div style={styles.navLeft}>
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                title="Open sidebar"
-                style={styles.iconBtn}
-              >
-                <PanelLeft size={18} />
-              </button>
-            )}
-            <span style={styles.navTitle}>
-              {conversations.find((c) => c._id === activeConversationId)?.title || 'New Conversation'}
-            </span>
-          </div>
-          <div style={styles.modelBadge}>
-            <span style={styles.statusDot}></span>
-            gemini-3.5-flash
-          </div>
-        </header>
-
-        {/* Message Area */}
-        <main style={styles.chatArea}>
-          {messages.length === 0 ? (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIconBox}>
-                <Sparkles size={28} color="#10b981" />
+        {viewMode === 'extractor' ? (
+          <ResumeExtractor />
+        ) : (
+          <>
+            {/* Top Navbar */}
+            <header style={styles.navbar}>
+              <div style={styles.navLeft}>
+                {!isSidebarOpen && (
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    title="Open sidebar"
+                    style={styles.iconBtn}
+                  >
+                    <PanelLeft size={18} />
+                  </button>
+                )}
+                <span style={styles.navTitle}>
+                  {conversations.find((c) => c._id === activeConversationId)?.title || 'New Conversation'}
+                </span>
               </div>
-              <h2 style={styles.emptyHeading}>Where would you like to start?</h2>
-              <p style={styles.emptySubtext}>
-                Ask code questions, draft architecture ideas, or debug complex issues.
-              </p>
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  ...styles.messageRow,
-                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                }}
-              >
-                <div
+              <div style={styles.modelBadge}>
+                <span style={styles.statusDot}></span>
+                gemini-3.5-flash
+              </div>
+            </header>
+
+            {/* Message Area */}
+            <main style={styles.chatArea}>
+              {messages.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIconBox}>
+                    <Sparkles size={28} color="#10b981" />
+                  </div>
+                  <h2 style={styles.emptyHeading}>Where would you like to start?</h2>
+                  <p style={styles.emptySubtext}>
+                    Ask code questions, draft architecture ideas, or debug complex issues.
+                  </p>
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      ...styles.messageRow,
+                      justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...styles.messageContainer,
+                        flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...styles.avatar,
+                          backgroundColor: msg.role === 'user' ? '#047857' : '#1e2430',
+                          border: msg.role === 'user' ? 'none' : '1px solid #28303f',
+                        }}
+                      >
+                        {msg.role === 'user' ? <User size={15} color="#fff" /> : <Bot size={15} color="#10b981" />}
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.bubble,
+                          backgroundColor: msg.role === 'user' ? '#064e3b' : '#14171d',
+                          borderColor: msg.role === 'user' ? '#065f46' : '#1f242d',
+                        }}
+                      >
+                        {msg.role === 'assistant' ? (
+                          msg.content ? (
+                            <>
+                              <MarkdownRenderer content={msg.content} />
+                              {isLoading && msg.id === messages[messages.length - 1]?.id && (
+                                <span className="streaming-cursor"></span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="streaming-cursor"></span>
+                          )
+                        ) : (
+                          <div style={styles.userMessageText}>{msg.content}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {errorMessage && (
+                <div style={styles.errorBanner}>
+                  <AlertCircle size={16} color="#ef4444" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </main>
+
+            {/* Floating Input Composer */}
+            <div style={styles.composerWrapper}>
+              <div style={styles.inputBox}>
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  value={inputPrompt}
+                  onChange={(e) => setInputPrompt(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask anything... (Press Enter to send, Shift + Enter for new line)"
+                  disabled={isLoading}
+                  style={styles.textarea}
+                />
+                <button
+                  onClick={() => handleSubmit()}
+                  disabled={isLoading || !inputPrompt.trim()}
                   style={{
-                    ...styles.messageContainer,
-                    flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                    ...styles.sendBtn,
+                    backgroundColor: !inputPrompt.trim() || isLoading ? '#1c222c' : '#10b981',
+                    cursor: !inputPrompt.trim() || isLoading ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  <div
-                    style={{
-                      ...styles.avatar,
-                      backgroundColor: msg.role === 'user' ? '#047857' : '#1e2430',
-                      border: msg.role === 'user' ? 'none' : '1px solid #28303f',
-                    }}
-                  >
-                    {msg.role === 'user' ? <User size={15} color="#fff" /> : <Bot size={15} color="#10b981" />}
-                  </div>
-
-                  <div
-                    style={{
-                      ...styles.bubble,
-                      backgroundColor: msg.role === 'user' ? '#064e3b' : '#14171d',
-                      borderColor: msg.role === 'user' ? '#065f46' : '#1f242d',
-                    }}
-                  >
-                    {msg.role === 'assistant' ? (
-                      msg.content ? (
-                        <>
-                          <MarkdownRenderer content={msg.content} />
-                          {isLoading && msg.id === messages[messages.length - 1]?.id && (
-                            <span className="streaming-cursor"></span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="streaming-cursor"></span>
-                      )
-                    ) : (
-                      <div style={styles.userMessageText}>{msg.content}</div>
-                    )}
-                  </div>
-                </div>
+                  <Send size={16} color={!inputPrompt.trim() || isLoading ? '#6b7280' : '#ffffff'} />
+                </button>
               </div>
-            ))
-          )}
-
-          {errorMessage && (
-            <div style={styles.errorBanner}>
-              <AlertCircle size={16} color="#ef4444" />
-              <span>{errorMessage}</span>
+              <div style={styles.footerNote}>
+                Powered by Google Gemini 3.5 Flash • Press Enter to send
+              </div>
             </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </main>
-
-        {/* Floating Input Composer */}
-        <div style={styles.composerWrapper}>
-          <div style={styles.inputBox}>
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={inputPrompt}
-              onChange={(e) => setInputPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask anything... (Press Enter to send, Shift + Enter for new line)"
-              disabled={isLoading}
-              style={styles.textarea}
-            />
-            <button
-              onClick={() => handleSubmit()}
-              disabled={isLoading || !inputPrompt.trim()}
-              style={{
-                ...styles.sendBtn,
-                backgroundColor: !inputPrompt.trim() || isLoading ? '#1c222c' : '#10b981',
-                cursor: !inputPrompt.trim() || isLoading ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <Send size={16} color={!inputPrompt.trim() || isLoading ? '#6b7280' : '#ffffff'} />
-            </button>
-          </div>
-          <div style={styles.footerNote}>
-            Powered by Google Gemini 3.5 Flash • Press Enter to send
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -431,7 +483,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: '14px',
+    marginBottom: '12px',
     padding: '0 4px',
   },
   brandTitle: {
@@ -442,6 +494,36 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.92rem',
     color: '#f9fafb',
     letterSpacing: '-0.2px',
+  },
+  tabSwitcher: {
+    display: 'flex',
+    gap: '6px',
+    marginBottom: '14px',
+  },
+  tabBtn: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    padding: '7px 8px',
+    borderRadius: '7px',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    border: '1px solid',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  extractorInfoBox: {
+    padding: '12px',
+    backgroundColor: '#13161c',
+    borderRadius: '8px',
+    border: '1px solid #1f2530',
+  },
+  extractorInfoText: {
+    fontSize: '0.78rem',
+    color: '#9ca3af',
+    lineHeight: 1.5,
   },
   newChatBtn: {
     display: 'flex',
@@ -505,6 +587,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column',
     height: '100%',
     backgroundColor: '#0a0c0f',
+    overflow: 'hidden',
   },
   navbar: {
     height: '52px',

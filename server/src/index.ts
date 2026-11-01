@@ -14,7 +14,7 @@ const port: number = parseInt(process.env.PORT || '5000', 10);
 const clientUrl: string = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // 1. Middleware configuration
-app.use('/api', extractRoutes);
+
 app.use(
   cors({
     origin: clientUrl,
@@ -23,6 +23,8 @@ app.use(
   })
 );
 app.use(express.json());
+
+app.use('/api', extractRoutes);
 
 // 2. Health check route
 app.get('/api/health', (req: Request, res: Response) => {

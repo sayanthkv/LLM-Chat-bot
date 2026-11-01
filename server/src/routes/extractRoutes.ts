@@ -2,15 +2,13 @@
 import { Router, Request, Response } from "express";
 import { extractRequestSchema } from "../schemas/extractRequestSchema";
 import { extractWithRetry } from "../retryExtractor";
+import { Extraction } from "../models/Extraction";
 
 const router = Router();
 
+// POST /api/extract - Parses resume, validates with Zod, saves to MongoDB
 router.post("/extract", async (req: Request, res: Response): Promise<void> => {
   try {
-
-    console.log("Raw req.headers['content-type']:", req.headers["content-type"]);
-    console.log("Received req.body:", req.body);
-    // 1. Validate the incoming HTTP body with Zod
     const bodyValidation = extractRequestSchema.safeParse(req.body);
 
     if (!bodyValidation.success) {
@@ -24,10 +22,10 @@ router.post("/extract", async (req: Request, res: Response): Promise<void> => {
 
     const { text } = bodyValidation.data;
 
-    // 2. Perform LLM Extraction with Few-Shot examples & auto-retry
+    // Run extraction with Zod auto-retry
     const extractionResult = await extractWithRetry(text, 2);
 
-    if (!extractionResult.success) {
+    if (!extractionResult.success || !extractionResult.data) {
       res.status(422).json({
         success: false,
         error: extractionResult.error || "Failed to extract valid resume data",
@@ -36,10 +34,15 @@ router.post("/extract", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 3. Return the clean, validated JSON to the client
+    // Save validated candidate to MongoDB
+    const savedRecord = await Extraction.create({
+      rawText: text,
+      candidate: extractionResult.data,
+    });
+
     res.status(200).json({
       success: true,
-      data: extractionResult.data,
+      data: savedRecord,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal Server Error";
@@ -51,5 +54,26 @@ router.post("/extract", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// GET /api/extractions - Retrieve all saved candidate profiles
+router.get("/extractions", async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const records = await Extraction.find({})
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: records.length,
+      data: records,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal Server Error";
+    console.error("Error fetching extractions:", message);
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve extractions",
+    });
+  }
+});
 
 export default router;
