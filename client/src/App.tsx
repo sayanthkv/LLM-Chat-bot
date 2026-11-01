@@ -1,6 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, ConversationSummary } from './types';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
+import { 
+  Sparkles, 
+  MessageSquare, 
+  Trash2, 
+  Plus, 
+  Send, 
+  PanelLeftClose, 
+  PanelLeft, 
+  AlertCircle,
+  Bot,
+  User
+} from 'lucide-react';
 
 export default function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -9,8 +21,10 @@ export default function App() {
   const [inputPrompt, setInputPrompt] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -19,6 +33,14 @@ export default function App() {
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+    }
+  }, [inputPrompt]);
 
   const fetchConversations = async () => {
     try {
@@ -62,10 +84,7 @@ export default function App() {
   };
 
   const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevents opening the conversation when clicking delete
-
-    const confirmDelete = window.confirm('Delete this conversation?');
-    if (!confirmDelete) return;
+    e.stopPropagation();
 
     try {
       const res = await fetch(`http://localhost:5000/api/conversations/${id}`, {
@@ -77,10 +96,8 @@ export default function App() {
         throw new Error(errorData.error || 'Failed to delete conversation.');
       }
 
-      // Remove from sidebar state immediately
       setConversations((prev) => prev.filter((conv) => conv._id !== id));
 
-      // If the currently open chat was deleted, reset the active screen
       if (activeConversationId === id) {
         setActiveConversationId(null);
         setMessages([]);
@@ -91,14 +108,18 @@ export default function App() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
     const trimmedPrompt = inputPrompt.trim();
     if (!trimmedPrompt || isLoading) return;
 
     setInputPrompt('');
     setErrorMessage(null);
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     let currentConvId = activeConversationId;
 
@@ -185,56 +206,112 @@ export default function App() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
     <div style={styles.appLayout}>
       {/* Sidebar */}
-      <aside style={styles.sidebar}>
+      <aside
+        style={{
+          ...styles.sidebar,
+          width: isSidebarOpen ? '270px' : '0px',
+          padding: isSidebarOpen ? '16px 12px' : '0px',
+          opacity: isSidebarOpen ? 1 : 0,
+        }}
+      >
+        <div style={styles.sidebarHeader}>
+          <div style={styles.brandTitle}>
+            <Sparkles size={18} color="#10b981" />
+            <span>Chat Console</span>
+          </div>
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            title="Close sidebar"
+            style={styles.iconBtn}
+          >
+            <PanelLeftClose size={18} />
+          </button>
+        </div>
+
         <button onClick={handleNewChat} style={styles.newChatBtn} disabled={isLoading}>
-          + New Chat
+          <Plus size={16} />
+          <span>New Chat</span>
         </button>
 
         <div style={styles.convList}>
           {conversations.length === 0 ? (
-            <p style={styles.emptySidebar}>No conversations yet</p>
+            <div style={styles.emptySidebar}>No conversations yet</div>
           ) : (
-            conversations.map((conv) => (
-              <div
-                key={conv._id}
-                onClick={() => handleSelectConversation(conv._id)}
-                style={{
-                  ...styles.convItemWrapper,
-                  backgroundColor:
-                    conv._id === activeConversationId ? '#2a2b32' : 'transparent',
-                }}
-              >
-                <span style={styles.convTitle}>
-                  💬 {conv.title || 'Untitled Chat'}
-                </span>
-                <button
-                  onClick={(e) => handleDeleteConversation(e, conv._id)}
-                  title="Delete conversation"
-                  style={styles.deleteBtn}
+            conversations.map((conv) => {
+              const isActive = conv._id === activeConversationId;
+              return (
+                <div
+                  key={conv._id}
+                  onClick={() => handleSelectConversation(conv._id)}
+                  style={{
+                    ...styles.convItem,
+                    backgroundColor: isActive ? '#1e232d' : 'transparent',
+                    borderColor: isActive ? '#2d3748' : 'transparent',
+                  }}
                 >
-                  ✕
-                </button>
-              </div>
-            ))
+                  <MessageSquare size={15} color={isActive ? '#10b981' : '#6b7280'} />
+                  <span style={{ ...styles.convTitle, color: isActive ? '#f3f4f6' : '#9ca3af' }}>
+                    {conv.title || 'Untitled Session'}
+                  </span>
+                  <button
+                    onClick={(e) => handleDeleteConversation(e, conv._id)}
+                    title="Delete conversation"
+                    style={styles.deleteBtn}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
       </aside>
 
       {/* Main Chat Panel */}
       <div style={styles.mainContainer}>
-        <header style={styles.header}>
-          <h1 style={styles.title}>Gemini Chat Assistant</h1>
-          <p style={styles.subtitle}>Full-stack MERN with Persistence</p>
+        {/* Top Navbar */}
+        <header style={styles.navbar}>
+          <div style={styles.navLeft}>
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                title="Open sidebar"
+                style={styles.iconBtn}
+              >
+                <PanelLeft size={18} />
+              </button>
+            )}
+            <span style={styles.navTitle}>
+              {conversations.find((c) => c._id === activeConversationId)?.title || 'New Conversation'}
+            </span>
+          </div>
+          <div style={styles.modelBadge}>
+            <span style={styles.statusDot}></span>
+            gemini-3.5-flash
+          </div>
         </header>
 
+        {/* Message Area */}
         <main style={styles.chatArea}>
           {messages.length === 0 ? (
             <div style={styles.emptyState}>
-              <h3>What would you like to explore today?</h3>
-              <p>Type your message below to start a new thread.</p>
+              <div style={styles.emptyIconBox}>
+                <Sparkles size={28} color="#10b981" />
+              </div>
+              <h2 style={styles.emptyHeading}>Where would you like to start?</h2>
+              <p style={styles.emptySubtext}>
+                Ask code questions, draft architecture ideas, or debug complex issues.
+              </p>
             </div>
           ) : (
             messages.map((msg) => (
@@ -247,56 +324,86 @@ export default function App() {
               >
                 <div
                   style={{
-                    ...styles.bubble,
-                    backgroundColor: msg.role === 'user' ? '#10a37f' : '#2a2b32',
-                    color: '#ffffff',
+                    ...styles.messageContainer,
+                    flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
                   }}
                 >
-                  <div style={styles.roleLabel}>
-                    {msg.role === 'user' ? 'You' : 'Gemini'}
+                  <div
+                    style={{
+                      ...styles.avatar,
+                      backgroundColor: msg.role === 'user' ? '#047857' : '#1e2430',
+                      border: msg.role === 'user' ? 'none' : '1px solid #28303f',
+                    }}
+                  >
+                    {msg.role === 'user' ? <User size={15} color="#fff" /> : <Bot size={15} color="#10b981" />}
                   </div>
-                  <div style={styles.messageContent}>
-  {msg.role === 'assistant' ? (
-    msg.content ? (
-      <MarkdownRenderer content={msg.content} />
-    ) : (
-      isLoading && '▋'
-    )
-  ) : (
-    msg.content
-  )}
-</div>
+
+                  <div
+                    style={{
+                      ...styles.bubble,
+                      backgroundColor: msg.role === 'user' ? '#064e3b' : '#14171d',
+                      borderColor: msg.role === 'user' ? '#065f46' : '#1f242d',
+                    }}
+                  >
+                    {msg.role === 'assistant' ? (
+                      msg.content ? (
+                        <>
+                          <MarkdownRenderer content={msg.content} />
+                          {isLoading && msg.id === messages[messages.length - 1]?.id && (
+                            <span className="streaming-cursor"></span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="streaming-cursor"></span>
+                      )
+                    ) : (
+                      <div style={styles.userMessageText}>{msg.content}</div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
           )}
 
-          {errorMessage && <div style={styles.errorBanner}>⚠️ {errorMessage}</div>}
+          {errorMessage && (
+            <div style={styles.errorBanner}>
+              <AlertCircle size={16} color="#ef4444" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </main>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <input
-            type="text"
-            value={inputPrompt}
-            onChange={(e) => setInputPrompt(e.target.value)}
-            placeholder="Type your message here..."
-            disabled={isLoading}
-            style={styles.input}
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !inputPrompt.trim()}
-            style={{
-              ...styles.button,
-              opacity: isLoading || !inputPrompt.trim() ? 0.6 : 1,
-              cursor: isLoading || !inputPrompt.trim() ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isLoading ? 'Streaming...' : 'Send'}
-          </button>
-        </form>
+        {/* Floating Input Composer */}
+        <div style={styles.composerWrapper}>
+          <div style={styles.inputBox}>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={inputPrompt}
+              onChange={(e) => setInputPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask anything... (Press Enter to send, Shift + Enter for new line)"
+              disabled={isLoading}
+              style={styles.textarea}
+            />
+            <button
+              onClick={() => handleSubmit()}
+              disabled={isLoading || !inputPrompt.trim()}
+              style={{
+                ...styles.sendBtn,
+                backgroundColor: !inputPrompt.trim() || isLoading ? '#1c222c' : '#10b981',
+                cursor: !inputPrompt.trim() || isLoading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <Send size={16} color={!inputPrompt.trim() || isLoading ? '#6b7280' : '#ffffff'} />
+            </button>
+          </div>
+          <div style={styles.footerNote}>
+            Powered by Google Gemini 3.5 Flash • Press Enter to send
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -307,170 +414,275 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     height: '100vh',
     width: '100vw',
-    backgroundColor: '#1e1f24',
-    color: '#ececec',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+    backgroundColor: '#0a0c0f',
     overflow: 'hidden',
   },
   sidebar: {
-    width: '260px',
-    backgroundColor: '#17171c',
-    borderRight: '1px solid #2e3038',
+    backgroundColor: '#0f1115',
+    borderRight: '1px solid #1a1e26',
     display: 'flex',
     flexDirection: 'column',
-    padding: '16px 12px',
-    gap: '12px',
+    transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s, opacity 0.15s',
+    overflow: 'hidden',
+    boxSizing: 'border-box',
+    zIndex: 10,
+  },
+  sidebarHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '14px',
+    padding: '0 4px',
+  },
+  brandTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontWeight: 700,
+    fontSize: '0.92rem',
+    color: '#f9fafb',
+    letterSpacing: '-0.2px',
   },
   newChatBtn: {
-    padding: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 14px',
     borderRadius: '8px',
-    border: '1px solid #3e414c',
-    backgroundColor: '#202127',
-    color: '#fff',
+    border: '1px solid #232833',
+    backgroundColor: '#161920',
+    color: '#e5e7eb',
+    fontSize: '0.88rem',
     fontWeight: 600,
     cursor: 'pointer',
-    textAlign: 'left',
+    marginBottom: '14px',
+    transition: 'all 0.15s ease',
   },
   convList: {
     flex: 1,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
+    gap: '3px',
   },
-  convItemWrapper: {
+  convItem: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: '10px',
     padding: '8px 10px',
-    borderRadius: '6px',
+    borderRadius: '7px',
     cursor: 'pointer',
-    transition: 'background-color 0.15s ease',
+    border: '1px solid transparent',
+    transition: 'all 0.15s ease',
   },
   convTitle: {
-    fontSize: '0.88rem',
-    color: '#d1d5db',
+    flex: 1,
+    fontSize: '0.86rem',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    flex: 1,
-    marginRight: '8px',
   },
   deleteBtn: {
     background: 'transparent',
     border: 'none',
-    color: '#8b8e98',
+    color: '#6b7280',
     cursor: 'pointer',
-    padding: '4px 6px',
+    padding: '4px',
     borderRadius: '4px',
-    fontSize: '0.85rem',
-    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptySidebar: {
     color: '#6b7280',
-    fontSize: '0.85rem',
+    fontSize: '0.82rem',
     textAlign: 'center',
-    marginTop: '20px',
+    marginTop: '28px',
   },
   mainContainer: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+    backgroundColor: '#0a0c0f',
   },
-  header: {
-    padding: '14px 24px',
-    borderBottom: '1px solid #2e3038',
-    backgroundColor: '#18191e',
-    textAlign: 'center',
+  navbar: {
+    height: '52px',
+    borderBottom: '1px solid #181c24',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 20px',
+    backgroundColor: '#0d1015',
   },
-  title: {
-    margin: 0,
-    fontSize: '1.15rem',
+  navLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  navTitle: {
+    fontSize: '0.9rem',
     fontWeight: 600,
+    color: '#e5e7eb',
+    maxWidth: '400px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
-  subtitle: {
-    margin: '2px 0 0 0',
-    fontSize: '0.8rem',
-    color: '#8e9297',
+  modelBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '7px',
+    padding: '4px 10px',
+    borderRadius: '9999px',
+    backgroundColor: '#141820',
+    border: '1px solid #232a38',
+    color: '#9ca3af',
+    fontSize: '0.78rem',
+    fontFamily: '"JetBrains Mono", monospace',
+  },
+  statusDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: '#10b981',
+  },
+  iconBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: '#9ca3af',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '6px',
+    borderRadius: '6px',
   },
   chatArea: {
     flex: 1,
     overflowY: 'auto',
-    padding: '24px',
+    padding: '24px 20px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
-    maxWidth: '850px',
+    gap: '20px',
+    maxWidth: '820px',
     width: '100%',
     margin: '0 auto',
     boxSizing: 'border-box',
   },
   emptyState: {
-    textAlign: 'center',
     margin: 'auto',
-    color: '#6e737d',
+    textAlign: 'center',
+    maxWidth: '420px',
+  },
+  emptyIconBox: {
+    width: '54px',
+    height: '54px',
+    borderRadius: '16px',
+    backgroundColor: '#131920',
+    border: '1px solid #232c3a',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '0 auto 16px auto',
+  },
+  emptyHeading: {
+    fontSize: '1.25rem',
+    fontWeight: 700,
+    color: '#f3f4f6',
+    marginBottom: '8px',
+  },
+  emptySubtext: {
+    fontSize: '0.88rem',
+    color: '#9ca3af',
+    lineHeight: 1.5,
   },
   messageRow: {
     display: 'flex',
     width: '100%',
   },
-  bubble: {
-    maxWidth: '75%',
-    padding: '12px 18px',
-    borderRadius: '12px',
-    lineHeight: 1.5,
-    wordBreak: 'break-word',
-  },
-  roleLabel: {
-    fontSize: '0.72rem',
-    fontWeight: 700,
-    marginBottom: '4px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    opacity: 0.8,
-  },
-  messageContent: {
-    fontSize: '0.95rem',
-    whiteSpace: 'pre-wrap',
-  },
-  errorBanner: {
-    padding: '10px 16px',
-    backgroundColor: '#ff4d4f22',
-    border: '1px solid #ff4d4f',
-    borderRadius: '8px',
-    color: '#ff7875',
-    fontSize: '0.9rem',
-    textAlign: 'center',
-  },
-  form: {
+  messageContainer: {
     display: 'flex',
     gap: '12px',
-    padding: '16px 24px',
-    borderTop: '1px solid #2e3038',
-    backgroundColor: '#18191e',
-    maxWidth: '850px',
+    maxWidth: '85%',
+  },
+  avatar: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '7px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: '2px',
+  },
+  bubble: {
+    padding: '12px 16px',
+    borderRadius: '12px',
+    border: '1px solid',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+  },
+  userMessageText: {
+    fontSize: '0.94rem',
+    color: '#f9fafb',
+    whiteSpace: 'pre-wrap',
+    lineHeight: 1.55,
+  },
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    backgroundColor: '#3b1212',
+    border: '1px solid #7f1d1d',
+    borderRadius: '8px',
+    color: '#fca5a5',
+    fontSize: '0.88rem',
+  },
+  composerWrapper: {
+    maxWidth: '820px',
     width: '100%',
     margin: '0 auto',
+    padding: '0 20px 16px 20px',
     boxSizing: 'border-box',
   },
-  input: {
-    flex: 1,
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: '1px solid #434651',
-    backgroundColor: '#2a2b32',
-    color: '#ffffff',
-    fontSize: '0.95rem',
-    outline: 'none',
+  inputBox: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: '8px',
+    backgroundColor: '#13161c',
+    border: '1px solid #232833',
+    borderRadius: '12px',
+    padding: '10px 12px 10px 16px',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
   },
-  button: {
-    padding: '12px 24px',
+  textarea: {
+    flex: 1,
+    background: 'transparent',
+    border: 'none',
+    outline: 'none',
+    color: '#f3f4f6',
+    fontSize: '0.94rem',
+    resize: 'none',
+    fontFamily: 'inherit',
+    lineHeight: 1.45,
+    maxHeight: '180px',
+  },
+  sendBtn: {
+    width: '34px',
+    height: '34px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#10a37f',
-    color: '#ffffff',
-    fontWeight: 600,
-    fontSize: '0.95rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background-color 0.15s ease',
+    flexShrink: 0,
+  },
+  footerNote: {
+    textAlign: 'center',
+    fontSize: '0.74rem',
+    color: '#6b7280',
+    marginTop: '8px',
   },
 };
