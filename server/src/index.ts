@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { ai } from './lib/gemini';
 import { connectDB } from './lib/db';
 import { Conversation } from './models/Conversation';
+import { generateConversationTitle } from './lib/titleGenerator';
 
 dotenv.config();
 
@@ -11,6 +12,7 @@ const app = express();
 const port: number = parseInt(process.env.PORT || '5000', 10);
 const clientUrl: string = process.env.CLIENT_URL || 'http://localhost:5173';
 
+// 1. Middleware configuration
 app.use(
   cors({
     origin: clientUrl,
@@ -20,12 +22,12 @@ app.use(
 );
 app.use(express.json());
 
-// 1. Health check
+// 2. Health check route
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'Backend is running smoothly' });
 });
 
-// 2. List all conversations (for sidebar)
+// 3. List all conversations (for sidebar)
 app.get('/api/conversations', async (req: Request, res: Response): Promise<void> => {
   try {
     const list = await Conversation.find({}, '_id title updatedAt createdAt')
@@ -33,11 +35,12 @@ app.get('/api/conversations', async (req: Request, res: Response): Promise<void>
       .lean();
     res.status(200).json(list);
   } catch (error: any) {
+    console.error('Fetch conversations error:', error?.message || error);
     res.status(500).json({ error: error?.message || 'Failed to fetch conversations.' });
   }
 });
 
-// 3. Create a new conversation
+// 4. Create a new conversation session
 app.post('/api/conversations', async (req: Request, res: Response): Promise<void> => {
   try {
     const { title } = req.body;
@@ -47,25 +50,48 @@ app.post('/api/conversations', async (req: Request, res: Response): Promise<void
     });
     res.status(201).json(conversation);
   } catch (error: any) {
+    console.error('Create conversation error:', error?.message || error);
     res.status(500).json({ error: error?.message || 'Failed to create conversation.' });
   }
 });
 
-// 4. Get a specific conversation and all its messages
+// 5. Get a specific conversation with all messages
 app.get('/api/conversations/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const conversation = await Conversation.findById(req.params.id);
+    const { id } = req.params;
+    const conversation = await Conversation.findById(id);
+
     if (!conversation) {
       res.status(404).json({ error: 'Conversation not found.' });
       return;
     }
+
     res.status(200).json(conversation);
   } catch (error: any) {
+    console.error('Fetch conversation error:', error?.message || error);
     res.status(500).json({ error: error?.message || 'Failed to fetch conversation.' });
   }
 });
 
-// 5. Streaming chat route with MongoDB persistence
+// 6. Delete a conversation and its messages
+app.delete('/api/conversations/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const deletedConversation = await Conversation.findByIdAndDelete(id);
+
+    if (!deletedConversation) {
+      res.status(404).json({ error: 'Conversation not found.' });
+      return;
+    }
+
+    res.status(200).json({ success: true, message: 'Conversation deleted successfully.' });
+  } catch (error: any) {
+    console.error('Delete conversation error:', error?.message || error);
+    res.status(500).json({ error: error?.message || 'Failed to delete conversation.' });
+  }
+});
+
+// 7. Streaming chat route with multi-turn memory & Turn-1 AI title generation
 interface ChatRequestBody {
   conversationId: string;
   prompt: string;
@@ -87,19 +113,17 @@ app.post(
         return;
       }
 
-      // 1. Fetch existing conversation from DB
+      // 1. Fetch conversation from MongoDB
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) {
         res.status(404).json({ error: 'Conversation not found.' });
         return;
       }
 
-      // 2. Set title automatically from the first message if still default
-      if (conversation.messages.length === 0 && conversation.title === 'New Conversation') {
-        conversation.title = prompt.trim().slice(0, 40);
-      }
+      // Check if this is Turn 1 to trigger AI title generation after completion
+      const isFirstTurn = conversation.messages.length === 0;
 
-      // 3. Append user message to conversation
+      // 2. Append incoming user prompt
       const userMessage = {
         role: 'user' as const,
         content: prompt.trim(),
@@ -107,19 +131,19 @@ app.post(
       };
       conversation.messages.push(userMessage);
 
-      // 4. Map DB history into Gemini-compatible contents format
+      // 3. Map messages into Gemini's multi-turn format
       const formattedContents = conversation.messages.map((msg) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }],
       }));
 
-      // 5. Set up chunked streaming headers
+      // 4. Configure HTTP chunked streaming headers
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Transfer-Encoding', 'chunked');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
 
-      // 6. Request streaming response from Gemini 3.5 Flash
+      // 5. Request stream from Gemini 3.5 Flash
       const responseStream = await ai.models.generateContentStream({
         model: 'gemini-3.5-flash',
         contents: formattedContents,
@@ -131,6 +155,7 @@ app.post(
 
       let completeReply = '';
 
+      // Stream tokens to client as they arrive
       for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
@@ -139,17 +164,24 @@ app.post(
         }
       }
 
-      // 7. Persist assistant reply in MongoDB
+      // 6. Save full model reply into conversation history
       conversation.messages.push({
         role: 'assistant',
         content: completeReply.trim(),
         createdAt: new Date(),
       });
+
+      // 7. Auto-generate a clean title with Gemini if this was Turn 1
+      if (isFirstTurn) {
+        const smartTitle = await generateConversationTitle(prompt.trim());
+        conversation.title = smartTitle;
+      }
+
       await conversation.save();
 
       res.end();
     } catch (error: any) {
-      console.error('Chat persistence error:', error?.message || error);
+      console.error('Chat streaming error:', error?.message || error);
 
       if (!res.headersSent) {
         res.status(500).json({
@@ -162,7 +194,7 @@ app.post(
   }
 );
 
-// Connect to MongoDB before starting server
+// Connect to MongoDB, then boot Express
 connectDB().then(() => {
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);

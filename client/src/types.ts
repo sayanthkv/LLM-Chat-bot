@@ -4,11 +4,12 @@ export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
-  createdAt: Date;
+  createdAt?: string | Date;
 }
 
-// Wire format sent across HTTP to our backend
-export interface HistoryMessagePayload {
-  role: MessageRole;
-  content: string;
+export interface ConversationSummary {
+  _id: string;
+  title: string;
+  updatedAt: string;
+  createdAt: string;
 }
