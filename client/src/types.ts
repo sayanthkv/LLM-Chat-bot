@@ -1,6 +1,22 @@
-// Add to client/src/types.ts
+// client/src/types.ts
 
-export type ExperienceLevel = "ENTRY" | "MID" | "SENIOR" | "LEAD";
+// --- Chat Interface Types ---
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt?: string | Date;
+}
+
+export interface ConversationSummary {
+  _id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Resume Extractor Types ---
+export type ExperienceLevel = 'ENTRY' | 'MID' | 'SENIOR' | 'LEAD';
 
 export interface WorkExperience {
   company: string;

@@ -26,19 +26,18 @@ export const ResumeExtractor: React.FC = () => {
     fetchHistory();
   }, []);
 
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/extractions');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
-        setHistory(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to load past extractions:', err);
+const fetchHistory = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/extractions`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      setHistory(data.data);
     }
-  };
-
+  } catch (err) {
+    console.error('Failed to load past extractions:', err);
+  }
+};
   const handleExtract = async () => {
     const trimmed = inputText.trim();
     if (!trimmed) {
@@ -55,11 +54,11 @@ export const ResumeExtractor: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed }),
-      });
+      const response = await fetch(`${API_BASE}/api/extract`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ text: trimmed }),
+});
 
       const result = await response.json();
 
