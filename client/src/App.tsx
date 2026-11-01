@@ -14,8 +14,12 @@ import {
   AlertCircle,
   Bot,
   User,
-  FileCheck2
+  FileCheck2,
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<'chat' | 'extractor'>('chat');
@@ -50,7 +54,7 @@ export default function App() {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/conversations');
+      const res = await fetch(`${API_BASE}/api/conversations`);
       if (!res.ok) throw new Error('Failed to load conversation list');
       const data: ConversationSummary[] = await res.json();
       setConversations(data);
@@ -66,7 +70,7 @@ export default function App() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${id}`);
+      const res = await fetch(`${API_BASE}/api/conversations/${id}`);
       if (!res.ok) throw new Error('Failed to load conversation');
       const data = await res.json();
 
@@ -95,7 +99,7 @@ export default function App() {
     e.stopPropagation();
 
     try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${id}`, {
+      const res = await fetch(`${API_BASE}/api/conversations/${id}`, {
         method: 'DELETE',
       });
 
@@ -133,7 +137,7 @@ export default function App() {
 
     if (!currentConvId) {
       try {
-        const createRes = await fetch('http://localhost:5000/api/conversations', {
+        const createRes = await fetch(`${API_BASE}/api/conversations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: trimmedPrompt.slice(0, 30) }),
@@ -166,7 +170,7 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/chat', {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,55 +225,64 @@ export default function App() {
     }
   };
 
+  const activeTitle = conversations.find((c) => c._id === activeConversationId)?.title || 'New Session';
+
   return (
     <div style={styles.appLayout}>
-      {/* Sidebar */}
+      {/* Collapsible Left Sidebar */}
       <aside
         style={{
           ...styles.sidebar,
-          width: isSidebarOpen ? '270px' : '0px',
-          padding: isSidebarOpen ? '16px 12px' : '0px',
-          opacity: isSidebarOpen ? 1 : 0,
+          width: isSidebarOpen ? '280px' : '0px',
+          padding: isSidebarOpen ? '18px 14px' : '0px',
+          borderRightWidth: isSidebarOpen ? '1px' : '0px',
         }}
       >
         <div style={styles.sidebarHeader}>
-          <div style={styles.brandTitle}>
-            <Sparkles size={18} color="#10b981" />
-            <span>AI Workspace</span>
+          <div style={styles.brandContainer}>
+            <div style={styles.brandIcon}>
+              <Sparkles size={17} color="#ffffff" />
+            </div>
+            <div>
+              <div style={styles.brandTitle}>CoreAI Studio</div>
+              <div style={styles.brandSubtitle}>LLM Operations</div>
+            </div>
           </div>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            title="Close sidebar"
+            title="Collapse Sidebar"
             style={styles.iconBtn}
           >
-            <PanelLeftClose size={18} />
+            <PanelLeftClose size={17} color="#475569" />
           </button>
         </div>
 
-        {/* View Switcher Tabs */}
+        {/* View Mode Toggle Pill */}
         <div style={styles.tabSwitcher}>
           <button
             onClick={() => setViewMode('chat')}
             style={{
               ...styles.tabBtn,
-              backgroundColor: viewMode === 'chat' ? '#102a20' : '#14171d',
-              borderColor: viewMode === 'chat' ? '#10b981' : '#232833',
-              color: viewMode === 'chat' ? '#34d399' : '#9ca3af',
+              backgroundColor: viewMode === 'chat' ? '#ffffff' : 'transparent',
+              color: viewMode === 'chat' ? '#14532d' : '#64748b',
+              boxShadow: viewMode === 'chat' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+              fontWeight: viewMode === 'chat' ? 600 : 500,
             }}
           >
-            <MessageSquare size={14} />
+            <MessageSquare size={14} color={viewMode === 'chat' ? '#166534' : '#64748b'} />
             <span>Chat</span>
           </button>
           <button
             onClick={() => setViewMode('extractor')}
             style={{
               ...styles.tabBtn,
-              backgroundColor: viewMode === 'extractor' ? '#102a20' : '#14171d',
-              borderColor: viewMode === 'extractor' ? '#10b981' : '#232833',
-              color: viewMode === 'extractor' ? '#34d399' : '#9ca3af',
+              backgroundColor: viewMode === 'extractor' ? '#ffffff' : 'transparent',
+              color: viewMode === 'extractor' ? '#14532d' : '#64748b',
+              boxShadow: viewMode === 'extractor' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+              fontWeight: viewMode === 'extractor' ? 600 : 500,
             }}
           >
-            <FileCheck2 size={14} />
+            <FileCheck2 size={14} color={viewMode === 'extractor' ? '#166534' : '#64748b'} />
             <span>Extractor</span>
           </button>
         </div>
@@ -277,13 +290,18 @@ export default function App() {
         {viewMode === 'chat' ? (
           <>
             <button onClick={handleNewChat} style={styles.newChatBtn} disabled={isLoading}>
-              <Plus size={16} />
-              <span>New Chat</span>
+              <Plus size={15} color="#ffffff" />
+              <span>New Conversation</span>
             </button>
+
+            <div style={styles.sessionHeaderRow}>
+              <span>HISTORY</span>
+              <span>{conversations.length}</span>
+            </div>
 
             <div style={styles.convList}>
               {conversations.length === 0 ? (
-                <div style={styles.emptySidebar}>No conversations yet</div>
+                <div style={styles.emptySidebar}>No prior sessions found</div>
               ) : (
                 conversations.map((conv) => {
                   const isActive = conv._id === activeConversationId;
@@ -293,20 +311,30 @@ export default function App() {
                       onClick={() => handleSelectConversation(conv._id)}
                       style={{
                         ...styles.convItem,
-                        backgroundColor: isActive ? '#1e232d' : 'transparent',
-                        borderColor: isActive ? '#2d3748' : 'transparent',
+                        backgroundColor: isActive ? '#f0fdf4' : 'transparent',
+                        borderColor: isActive ? '#bbf7d0' : 'transparent',
                       }}
                     >
-                      <MessageSquare size={15} color={isActive ? '#10b981' : '#6b7280'} />
-                      <span style={{ ...styles.convTitle, color: isActive ? '#f3f4f6' : '#9ca3af' }}>
+                      <MessageSquare 
+                        size={14} 
+                        color={isActive ? '#15803d' : '#94a3b8'} 
+                        style={{ flexShrink: 0 }} 
+                      />
+                      <span
+                        style={{
+                          ...styles.convTitle,
+                          color: isActive ? '#14532d' : '#334155',
+                          fontWeight: isActive ? 600 : 450,
+                        }}
+                      >
                         {conv.title || 'Untitled Session'}
                       </span>
                       <button
                         onClick={(e) => handleDeleteConversation(e, conv._id)}
-                        title="Delete conversation"
+                        title="Delete session"
                         style={styles.deleteBtn}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   );
@@ -316,108 +344,123 @@ export default function App() {
           </>
         ) : (
           <div style={styles.extractorInfoBox}>
+            <div style={styles.infoBoxHeader}>
+              <ShieldCheck size={16} color="#15803d" />
+              <strong style={{ fontSize: '0.82rem', color: '#166534' }}>Structured Parser</strong>
+            </div>
             <p style={styles.extractorInfoText}>
-              Paste messy resume text to extract candidate contact info, skills, experience, and education validated with Zod.
+              Submits unstructured candidate summaries into a strict Zod contract with automatic self-healing repair loops.
             </p>
           </div>
         )}
       </aside>
 
-      {/* Main Content Panel */}
+      {/* Main Panel */}
       <div style={styles.mainContainer}>
         {viewMode === 'extractor' ? (
           <ResumeExtractor />
         ) : (
           <>
-            {/* Top Navbar */}
+            {/* Clean Top Bar */}
             <header style={styles.navbar}>
               <div style={styles.navLeft}>
                 {!isSidebarOpen && (
                   <button
                     onClick={() => setIsSidebarOpen(true)}
-                    title="Open sidebar"
-                    style={styles.iconBtn}
+                    title="Open Sidebar"
+                    style={styles.sidebarToggleBtn}
                   >
-                    <PanelLeft size={18} />
+                    <PanelLeft size={16} color="#475569" />
                   </button>
                 )}
-                <span style={styles.navTitle}>
-                  {conversations.find((c) => c._id === activeConversationId)?.title || 'New Conversation'}
-                </span>
+                <div style={styles.breadcrumbs}>
+                  <span style={styles.breadcrumbMuted}>Sessions</span>
+                  <ChevronRight size={13} color="#94a3b8" />
+                  <span style={styles.navTitle}>{activeTitle}</span>
+                </div>
               </div>
-              <div style={styles.modelBadge}>
+
+              <div style={styles.modelPill}>
                 <span style={styles.statusDot}></span>
-                gemini-3.5-flash
+                <span>gemini-2.5-flash</span>
               </div>
             </header>
 
-            {/* Message Area */}
+            {/* Conversation Flow */}
             <main style={styles.chatArea}>
               {messages.length === 0 ? (
-                <div style={styles.emptyState}>
-                  <div style={styles.emptyIconBox}>
-                    <Sparkles size={28} color="#10b981" />
+                <div style={styles.emptyStateContainer}>
+                  <div style={styles.emptyIconCircle}>
+                    <Sparkles size={24} color="#15803d" />
                   </div>
-                  <h2 style={styles.emptyHeading}>Where would you like to start?</h2>
+                  <h2 style={styles.emptyHeading}>How can I help you today?</h2>
                   <p style={styles.emptySubtext}>
-                    Ask code questions, draft architecture ideas, or debug complex issues.
+                    Ask complex systems questions, plan architecture, or refine full-stack workflows.
                   </p>
                 </div>
               ) : (
-                messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    style={{
-                      ...styles.messageRow,
-                      justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    }}
-                  >
+                messages.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  return (
                     <div
+                      key={msg.id}
                       style={{
-                        ...styles.messageContainer,
-                        flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                        ...styles.messageRow,
+                        justifyContent: isUser ? 'flex-end' : 'flex-start',
                       }}
                     >
                       <div
                         style={{
-                          ...styles.avatar,
-                          backgroundColor: msg.role === 'user' ? '#047857' : '#1e2430',
-                          border: msg.role === 'user' ? 'none' : '1px solid #28303f',
+                          ...styles.messageContainer,
+                          flexDirection: isUser ? 'row-reverse' : 'row',
                         }}
                       >
-                        {msg.role === 'user' ? <User size={15} color="#fff" /> : <Bot size={15} color="#10b981" />}
-                      </div>
+                        <div
+                          style={{
+                            ...styles.avatar,
+                            backgroundColor: isUser ? '#14532d' : '#ffffff',
+                            borderColor: isUser ? '#14532d' : '#e2e8f0',
+                            color: isUser ? '#ffffff' : '#15803d',
+                          }}
+                        >
+                          {isUser ? <User size={14} color="#ffffff" /> : <Bot size={14} color="#15803d" />}
+                        </div>
 
-                      <div
-                        style={{
-                          ...styles.bubble,
-                          backgroundColor: msg.role === 'user' ? '#064e3b' : '#14171d',
-                          borderColor: msg.role === 'user' ? '#065f46' : '#1f242d',
-                        }}
-                      >
-                        {msg.role === 'assistant' ? (
-                          msg.content ? (
-                            <>
-                              <MarkdownRenderer content={msg.content} />
-                              {isLoading && msg.id === messages[messages.length - 1]?.id && (
-                                <span className="streaming-cursor"></span>
-                              )}
-                            </>
+                        <div
+                          style={{
+                            ...styles.bubble,
+                            backgroundColor: isUser ? '#14532d' : '#ffffff',
+                            color: isUser ? '#f8fafc' : '#1e293b',
+                            borderColor: isUser ? '#14532d' : '#e2e8f0',
+                            boxShadow: isUser 
+                              ? '0 2px 6px rgba(20, 83, 45, 0.15)' 
+                              : '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                          }}
+                        >
+                          {!isUser ? (
+                            msg.content ? (
+                              <div style={styles.assistantMarkdown}>
+                                <MarkdownRenderer content={msg.content} />
+                                {isLoading && msg.id === messages[messages.length - 1]?.id && (
+                                  <span className="streaming-cursor"></span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="streaming-cursor"></span>
+                            )
                           ) : (
-                            <span className="streaming-cursor"></span>
-                          )
-                        ) : (
-                          <div style={styles.userMessageText}>{msg.content}</div>
-                        )}
+                            <div style={styles.userMessageText}>{msg.content}</div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
 
               {errorMessage && (
                 <div style={styles.errorBanner}>
-                  <AlertCircle size={16} color="#ef4444" />
+                  <AlertCircle size={15} color="#b91c1c" />
                   <span>{errorMessage}</span>
                 </div>
               )}
@@ -425,7 +468,7 @@ export default function App() {
               <div ref={messagesEndRef} />
             </main>
 
-            {/* Floating Input Composer */}
+            {/* Input Form Bar */}
             <div style={styles.composerWrapper}>
               <div style={styles.inputBox}>
                 <textarea
@@ -434,7 +477,7 @@ export default function App() {
                   value={inputPrompt}
                   onChange={(e) => setInputPrompt(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask anything... (Press Enter to send, Shift + Enter for new line)"
+                  placeholder="Ask a question or describe a task..."
                   disabled={isLoading}
                   style={styles.textarea}
                 />
@@ -443,15 +486,18 @@ export default function App() {
                   disabled={isLoading || !inputPrompt.trim()}
                   style={{
                     ...styles.sendBtn,
-                    backgroundColor: !inputPrompt.trim() || isLoading ? '#1c222c' : '#10b981',
+                    backgroundColor: !inputPrompt.trim() || isLoading ? '#e2e8f0' : '#14532d',
                     cursor: !inputPrompt.trim() || isLoading ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  <Send size={16} color={!inputPrompt.trim() || isLoading ? '#6b7280' : '#ffffff'} />
+                  <Send 
+                    size={15} 
+                    color={!inputPrompt.trim() || isLoading ? '#94a3b8' : '#ffffff'} 
+                  />
                 </button>
               </div>
               <div style={styles.footerNote}>
-                Powered by Google Gemini 3.5 Flash • Press Enter to send
+                Tokens stream in real time via Gemini 2.5 Flash • Press Enter to send, Shift + Enter for newline
               </div>
             </div>
           </>
@@ -466,15 +512,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     height: '100vh',
     width: '100vw',
-    backgroundColor: '#0a0c0f',
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     overflow: 'hidden',
   },
   sidebar: {
-    backgroundColor: '#0f1115',
-    borderRight: '1px solid #1a1e26',
+    backgroundColor: '#ffffff',
+    borderRight: '1px solid #e2e8f0',
     display: 'flex',
     flexDirection: 'column',
-    transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s, opacity 0.15s',
+    transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1), padding 0.2s',
     overflow: 'hidden',
     boxSizing: 'border-box',
     zIndex: 10,
@@ -483,21 +531,41 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: '12px',
-    padding: '0 4px',
+    marginBottom: '16px',
+    padding: '0 2px',
   },
-  brandTitle: {
+  brandContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '9px',
+  },
+  brandIcon: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '7px',
+    backgroundColor: '#14532d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 4px rgba(20, 83, 45, 0.2)',
+  },
+  brandTitle: {
+    fontSize: '0.88rem',
     fontWeight: 700,
-    fontSize: '0.92rem',
-    color: '#f9fafb',
-    letterSpacing: '-0.2px',
+    color: '#0f172a',
+    lineHeight: 1.2,
+  },
+  brandSubtitle: {
+    fontSize: '0.70rem',
+    color: '#64748b',
+    fontWeight: 500,
   },
   tabSwitcher: {
     display: 'flex',
-    gap: '6px',
+    gap: '4px',
+    padding: '3px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: '8px',
     marginBottom: '14px',
   },
   tabBtn: {
@@ -506,39 +574,39 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '6px',
-    padding: '7px 8px',
-    borderRadius: '7px',
-    fontSize: '0.8rem',
-    fontWeight: 600,
-    border: '1px solid',
+    padding: '6px 8px',
+    borderRadius: '6px',
+    fontSize: '0.78rem',
+    border: 'none',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
-  },
-  extractorInfoBox: {
-    padding: '12px',
-    backgroundColor: '#13161c',
-    borderRadius: '8px',
-    border: '1px solid #1f2530',
-  },
-  extractorInfoText: {
-    fontSize: '0.78rem',
-    color: '#9ca3af',
-    lineHeight: 1.5,
   },
   newChatBtn: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '8px',
-    padding: '10px 14px',
+    padding: '9px 12px',
     borderRadius: '8px',
-    border: '1px solid #232833',
-    backgroundColor: '#161920',
-    color: '#e5e7eb',
-    fontSize: '0.88rem',
+    border: 'none',
+    backgroundColor: '#14532d',
+    color: '#ffffff',
+    fontSize: '0.82rem',
     fontWeight: 600,
     cursor: 'pointer',
-    marginBottom: '14px',
-    transition: 'all 0.15s ease',
+    marginBottom: '16px',
+    boxShadow: '0 1px 3px rgba(20, 83, 45, 0.15)',
+    transition: 'background-color 0.15s ease',
+  },
+  sessionHeaderRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    letterSpacing: '0.05em',
+    color: '#94a3b8',
+    padding: '0 4px 6px 4px',
   },
   convList: {
     flex: 1,
@@ -550,16 +618,16 @@ const styles: { [key: string]: React.CSSProperties } = {
   convItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    padding: '8px 10px',
+    gap: '8px',
+    padding: '7px 9px',
     borderRadius: '7px',
     cursor: 'pointer',
     border: '1px solid transparent',
-    transition: 'all 0.15s ease',
+    transition: 'all 0.12s ease',
   },
   convTitle: {
     flex: 1,
-    fontSize: '0.86rem',
+    fontSize: '0.82rem',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -567,78 +635,116 @@ const styles: { [key: string]: React.CSSProperties } = {
   deleteBtn: {
     background: 'transparent',
     border: 'none',
-    color: '#6b7280',
+    color: '#94a3b8',
     cursor: 'pointer',
     padding: '4px',
     borderRadius: '4px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'color 0.12s ease',
   },
   emptySidebar: {
-    color: '#6b7280',
-    fontSize: '0.82rem',
+    color: '#94a3b8',
+    fontSize: '0.78rem',
     textAlign: 'center',
-    marginTop: '28px',
+    marginTop: '32px',
+  },
+  extractorInfoBox: {
+    padding: '12px',
+    backgroundColor: '#f0fdf4',
+    borderRadius: '8px',
+    border: '1px solid #bbf7d0',
+  },
+  infoBoxHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '6px',
+  },
+  extractorInfoText: {
+    fontSize: '0.76rem',
+    color: '#166534',
+    lineHeight: 1.45,
+    margin: 0,
   },
   mainContainer: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    backgroundColor: '#0a0c0f',
+    backgroundColor: '#f8fafc',
     overflow: 'hidden',
   },
   navbar: {
     height: '52px',
-    borderBottom: '1px solid #181c24',
+    borderBottom: '1px solid #e2e8f0',
+    backgroundColor: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '0 20px',
-    backgroundColor: '#0d1015',
   },
   navLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    gap: '10px',
+  },
+  sidebarToggleBtn: {
+    background: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '6px',
+    padding: '5px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  breadcrumbs: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  breadcrumbMuted: {
+    fontSize: '0.80rem',
+    color: '#64748b',
+    fontWeight: 500,
   },
   navTitle: {
-    fontSize: '0.9rem',
+    fontSize: '0.82rem',
     fontWeight: 600,
-    color: '#e5e7eb',
-    maxWidth: '400px',
+    color: '#0f172a',
+    maxWidth: '350px',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  modelBadge: {
+  modelPill: {
     display: 'flex',
     alignItems: 'center',
-    gap: '7px',
+    gap: '6px',
     padding: '4px 10px',
-    borderRadius: '9999px',
-    backgroundColor: '#141820',
-    border: '1px solid #232a38',
-    color: '#9ca3af',
-    fontSize: '0.78rem',
-    fontFamily: '"JetBrains Mono", monospace',
+    borderRadius: '20px',
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    color: '#166534',
+    fontSize: '0.74rem',
+    fontWeight: 600,
   },
   statusDot: {
     width: '6px',
     height: '6px',
     borderRadius: '50%',
-    backgroundColor: '#10b981',
+    backgroundColor: '#16a34a',
   },
   iconBtn: {
     background: 'transparent',
     border: 'none',
-    color: '#9ca3af',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '6px',
+    padding: '4px',
     borderRadius: '6px',
   },
   chatArea: {
@@ -647,38 +753,40 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '24px 20px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px',
+    gap: '18px',
     maxWidth: '820px',
     width: '100%',
     margin: '0 auto',
     boxSizing: 'border-box',
   },
-  emptyState: {
+  emptyStateContainer: {
     margin: 'auto',
     textAlign: 'center',
-    maxWidth: '420px',
+    maxWidth: '440px',
+    padding: '40px 16px',
   },
-  emptyIconBox: {
-    width: '54px',
-    height: '54px',
-    borderRadius: '16px',
-    backgroundColor: '#131920',
-    border: '1px solid #232c3a',
+  emptyIconCircle: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: '0 auto 16px auto',
+    margin: '0 auto 14px auto',
   },
   emptyHeading: {
     fontSize: '1.25rem',
     fontWeight: 700,
-    color: '#f3f4f6',
-    marginBottom: '8px',
+    color: '#0f172a',
+    margin: '0 0 6px 0',
   },
   emptySubtext: {
-    fontSize: '0.88rem',
-    color: '#9ca3af',
+    fontSize: '0.85rem',
+    color: '#64748b',
     lineHeight: 1.5,
+    margin: 0,
   },
   messageRow: {
     display: 'flex',
@@ -686,7 +794,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   messageContainer: {
     display: 'flex',
-    gap: '12px',
+    gap: '10px',
     maxWidth: '85%',
   },
   avatar: {
@@ -698,29 +806,36 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: '2px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
   },
   bubble: {
-    padding: '12px 16px',
-    borderRadius: '12px',
-    border: '1px solid',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+    padding: '11px 15px',
+    borderRadius: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
   },
   userMessageText: {
-    fontSize: '0.94rem',
-    color: '#f9fafb',
+    fontSize: '0.90rem',
+    color: '#ffffff',
     whiteSpace: 'pre-wrap',
     lineHeight: 1.55,
+  },
+  assistantMarkdown: {
+    fontSize: '0.90rem',
+    color: '#1e293b',
+    lineHeight: 1.6,
   },
   errorBanner: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
+    gap: '8px',
     padding: '10px 14px',
-    backgroundColor: '#3b1212',
-    border: '1px solid #7f1d1d',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
     borderRadius: '8px',
-    color: '#fca5a5',
-    fontSize: '0.88rem',
+    color: '#991b1b',
+    fontSize: '0.82rem',
   },
   composerWrapper: {
     maxWidth: '820px',
@@ -733,39 +848,39 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'flex-end',
     gap: '8px',
-    backgroundColor: '#13161c',
-    border: '1px solid #232833',
-    borderRadius: '12px',
-    padding: '10px 12px 10px 16px',
-    boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+    backgroundColor: '#ffffff',
+    border: '1px solid #cbd5e1',
+    borderRadius: '10px',
+    padding: '8px 10px 8px 14px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
   },
   textarea: {
     flex: 1,
     background: 'transparent',
     border: 'none',
     outline: 'none',
-    color: '#f3f4f6',
-    fontSize: '0.94rem',
+    color: '#0f172a',
+    fontSize: '0.90rem',
     resize: 'none',
     fontFamily: 'inherit',
     lineHeight: 1.45,
     maxHeight: '180px',
   },
   sendBtn: {
-    width: '34px',
-    height: '34px',
-    borderRadius: '8px',
+    width: '32px',
+    height: '32px',
+    borderRadius: '7px',
     border: 'none',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'background-color 0.15s ease',
+    transition: 'all 0.15s ease',
     flexShrink: 0,
   },
   footerNote: {
     textAlign: 'center',
-    fontSize: '0.74rem',
-    color: '#6b7280',
-    marginTop: '8px',
+    fontSize: '0.70rem',
+    color: '#94a3b8',
+    marginTop: '6px',
   },
 };
