@@ -91,3 +91,10 @@ code {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
+
+.assistant-text,
+.assistant-text p,
+.assistant-text li,
+.assistant-text span {
+  color: #0f172a !important; /* Force visible dark text */
+}

@@ -1,4 +1,3 @@
-// client/src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, ConversationSummary } from './types';
 import { ResumeExtractor } from './components/ResumeExtractor';
@@ -206,7 +205,8 @@ export default function App() {
         }
       }
 
-      fetchConversations();
+      // Re-fetch conversation list to pick up the AI generated title
+      await fetchConversations();
     } catch (err: any) {
       console.error('Chat error:', err);
       setErrorMessage(err.message || 'An error occurred.');
@@ -382,7 +382,7 @@ export default function App() {
 
               <div style={styles.modelPill}>
                 <span style={styles.statusDot}></span>
-                <span>gemini-2.5-flash</span>
+                <span>gemini-3.8-flash</span>
               </div>
             </header>
 
@@ -430,16 +430,16 @@ export default function App() {
                           style={{
                             ...styles.bubble,
                             backgroundColor: isUser ? '#14532d' : '#ffffff',
-                            color: isUser ? '#f8fafc' : '#1e293b',
+                            color: isUser ? '#ffffff' : '#0f172a',
                             borderColor: isUser ? '#14532d' : '#e2e8f0',
                             boxShadow: isUser 
                               ? '0 2px 6px rgba(20, 83, 45, 0.15)' 
-                              : '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                              : '0 1px 3px rgba(0,0,0,0.06)',
                           }}
                         >
                           {!isUser ? (
                             msg.content ? (
-                              <div style={styles.assistantMarkdown}>
+                              <div style={styles.assistantMarkdown} className="assistant-text">
                                 <MarkdownRenderer content={msg.content} />
                                 {isLoading && msg.id === messages[messages.length - 1]?.id && (
                                   <span className="streaming-cursor"></span>
@@ -497,7 +497,7 @@ export default function App() {
                 </button>
               </div>
               <div style={styles.footerNote}>
-                Tokens stream in real time via Gemini 2.5 Flash • Press Enter to send, Shift + Enter for newline
+                Tokens stream in real time via Gemini 3.5 Flash • Press Enter to send, Shift + Enter for newline
               </div>
             </div>
           </>
@@ -675,6 +675,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     height: '100%',
     backgroundColor: '#f8fafc',
     overflow: 'hidden',
+    alignItems: 'stretch',
   },
   navbar: {
     height: '52px',
@@ -684,6 +685,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '0 20px',
+    flexShrink: 0,
   },
   navLeft: {
     display: 'flex',
@@ -810,10 +812,12 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderStyle: 'solid',
   },
   bubble: {
-    padding: '11px 15px',
-    borderRadius: '10px',
+    padding: '12px 18px',
+    borderRadius: '12px',
     borderWidth: '1px',
     borderStyle: 'solid',
+    maxWidth: '100%',
+    wordBreak: 'break-word',
   },
   userMessageText: {
     fontSize: '0.90rem',
@@ -822,8 +826,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     lineHeight: 1.55,
   },
   assistantMarkdown: {
-    fontSize: '0.90rem',
-    color: '#1e293b',
+    fontSize: '0.92rem',
+    color: '#0f172a',
     lineHeight: 1.6,
   },
   errorBanner: {
@@ -841,18 +845,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     maxWidth: '820px',
     width: '100%',
     margin: '0 auto',
-    padding: '0 20px 16px 20px',
+    padding: '0 20px 20px 20px',
     boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   inputBox: {
     display: 'flex',
     alignItems: 'flex-end',
-    gap: '8px',
+    gap: '10px',
     backgroundColor: '#ffffff',
     border: '1px solid #cbd5e1',
-    borderRadius: '10px',
-    padding: '8px 10px 8px 14px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    borderRadius: '14px',
+    padding: '10px 14px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+    width: '100%',
+    boxSizing: 'border-box',
   },
   textarea: {
     flex: 1,
