@@ -5,6 +5,7 @@ import { ai } from './lib/gemini';
 import { connectDB } from './lib/db';
 import { Conversation } from './models/Conversation';
 import { generateConversationTitle } from './lib/titleGenerator';
+import extractRoutes from './routes/extractRoutes';
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ const port: number = parseInt(process.env.PORT || '5000', 10);
 const clientUrl: string = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // 1. Middleware configuration
+app.use('/api', extractRoutes);
 app.use(
   cors({
     origin: clientUrl,
