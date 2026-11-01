@@ -190,7 +190,7 @@ app.post(
       while (attempts < maxAttempts) {
         try {
           responseStream = await ai.models.generateContentStream({
-            model: 'gemini-3.8-flash',
+            model: 'gemini-3.5-flash',
             contents: formattedContents,
             config: {
               systemInstruction:

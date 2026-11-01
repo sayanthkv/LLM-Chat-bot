@@ -382,7 +382,7 @@ export default function App() {
 
               <div style={styles.modelPill}>
                 <span style={styles.statusDot}></span>
-                <span>gemini-3.8-flash</span>
+                <span>gemini-3.5-flash</span>
               </div>
             </header>
 
