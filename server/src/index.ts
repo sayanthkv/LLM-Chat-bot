@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { ai } from './lib/gemini';
 import { connectDB } from './lib/db';
 import { Conversation } from './models/Conversation';
@@ -13,8 +14,35 @@ const app = express();
 const port: number = parseInt(process.env.PORT || '5000', 10);
 const clientUrl: string = process.env.CLIENT_URL || 'http://localhost:5173';
 
-// 1. Middleware configuration
+// Enable trust proxy for reverse proxies (Render, Heroku, Vercel)
+app.set('trust proxy', 1);
 
+// 1. Rate Limiting Configurations
+// General limiter: 100 requests every 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again after 15 minutes.',
+  },
+});
+
+// Strict limiter for heavy AI generation routes (chat and extraction)
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 10, // Limit to 10 AI generation calls per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'AI usage quota reached. Please wait a minute before making more requests.',
+  },
+});
+
+// 2. Middleware configuration
 app.use(
   cors({
     origin: clientUrl,
@@ -22,16 +50,22 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(express.json());
 
-app.use('/api', extractRoutes);
+// Apply global rate limiting to all /api routes
+app.use('/api', globalLimiter);
 
-// 2. Health check route
+// 3. Mount Routes
+// Protected extraction routes with aiLimiter
+app.use('/api', aiLimiter, extractRoutes);
+
+// Health check route
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'Backend is running smoothly' });
 });
 
-// 3. List all conversations (for sidebar)
+// 4. List all conversations (for sidebar)
 app.get('/api/conversations', async (req: Request, res: Response): Promise<void> => {
   try {
     const list = await Conversation.find({}, '_id title updatedAt createdAt')
@@ -44,7 +78,7 @@ app.get('/api/conversations', async (req: Request, res: Response): Promise<void>
   }
 });
 
-// 4. Create a new conversation session
+// 5. Create a new conversation session
 app.post('/api/conversations', async (req: Request, res: Response): Promise<void> => {
   try {
     const { title } = req.body;
@@ -59,7 +93,7 @@ app.post('/api/conversations', async (req: Request, res: Response): Promise<void
   }
 });
 
-// 5. Get a specific conversation with all messages
+// 6. Get a specific conversation with all messages
 app.get('/api/conversations/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -77,7 +111,7 @@ app.get('/api/conversations/:id', async (req: Request, res: Response): Promise<v
   }
 });
 
-// 6. Delete a conversation and its messages
+// 7. Delete a conversation and its messages
 app.delete('/api/conversations/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -95,7 +129,7 @@ app.delete('/api/conversations/:id', async (req: Request, res: Response): Promis
   }
 });
 
-// 7. Streaming chat route with multi-turn memory & Turn-1 AI title generation
+// 8. Streaming chat route with multi-turn memory & Turn-1 AI title generation
 interface ChatRequestBody {
   conversationId: string;
   prompt: string;
@@ -103,6 +137,7 @@ interface ChatRequestBody {
 
 app.post(
   '/api/chat',
+  aiLimiter, // Apply AI rate limiter directly to the streaming chat route
   async (req: Request<{}, {}, ChatRequestBody>, res: Response): Promise<void> => {
     try {
       const { conversationId, prompt } = req.body;
@@ -147,7 +182,7 @@ app.post(
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
 
-      // 5. Request stream from Gemini 3.5 Flash
+      // 5. Request stream from Gemini
       const responseStream = await ai.models.generateContentStream({
         model: 'gemini-3.5-flash',
         contents: formattedContents,
