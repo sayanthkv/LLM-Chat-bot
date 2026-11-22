@@ -20,6 +20,28 @@ app.set('trust proxy', 1);
 // Helper for stepped backoff delays
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Priority fallback cascade across your available Google AI Studio quota buckets
+const CHAT_FALLBACK_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+];
+
+function isQuotaOrTransientError(err: any): boolean {
+  const msg = err?.message || String(err);
+  return (
+    msg.includes('429') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('Quota exceeded') ||
+    msg.includes('503') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('high demand')
+  );
+}
+
 // 1. Rate Limiting Configurations
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -34,7 +56,7 @@ const globalLimiter = rateLimit({
 
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -176,52 +198,47 @@ app.post(
         parts: [{ text: msg.content }],
       }));
 
-      // Configure HTTP chunked streaming headers
+      // HTTP Streaming headers (prevent reverse-proxy buffering on Render)
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Transfer-Encoding', 'chunked');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
 
-      // Request stream from gemini-3.5-flash with exponential backoff retry for 503 spikes
-      let responseStream;
-      let attempts = 0;
-      const maxAttempts = 3;
+      let responseStream = null;
+      let activeModel = '';
 
-      while (attempts < maxAttempts) {
+      // Automated multi-model failover loop across Flash fleet
+      for (const modelCandidate of CHAT_FALLBACK_MODELS) {
         try {
+          console.log(`[ChatStream] Attempting generation via: ${modelCandidate}`);
           responseStream = await ai.models.generateContentStream({
-            model: 'gemini-3.5-flash',
+            model: modelCandidate,
             contents: formattedContents,
             config: {
               systemInstruction:
                 'You are a helpful, knowledgeable AI assistant. Keep responses clear, helpful, and concise.',
             },
           });
-          break;
-        } catch (streamErr: any) {
-          const errStr = streamErr?.message || String(streamErr);
-          const isTransient =
-            errStr.includes('503') ||
-            errStr.includes('UNAVAILABLE') ||
-            errStr.includes('high demand');
-
-          attempts++;
-          if (isTransient && attempts < maxAttempts) {
-            console.warn(`[Gemini 503 Spike] Retrying in ${attempts * 2}s (Attempt ${attempts}/${maxAttempts})...`);
-            await sleep(attempts * 2000);
-          } else {
-            throw streamErr;
+          activeModel = modelCandidate;
+          break; // Acquired active stream successfully
+        } catch (err: any) {
+          if (isQuotaOrTransientError(err)) {
+            console.warn(`[Failover] Model ${modelCandidate} reached quota limit or is congested. Cascading to next candidate...`);
+            await sleep(500);
+            continue;
           }
+          throw err;
         }
       }
 
       if (!responseStream) {
-        throw new Error('Could not establish stream with Gemini.');
+        throw new Error('All configured Gemini models have exhausted their quotas or are temporarily unavailable.');
       }
 
+      console.log(`[ChatStream] Successfully streaming using: ${activeModel}`);
       let completeReply = '';
 
-      // Stream tokens to client as they arrive
       for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
@@ -230,7 +247,7 @@ app.post(
         }
       }
 
-      // Save full model reply into conversation history
+      // Save complete model reply to conversation history
       conversation.messages.push({
         role: 'assistant',
         content: completeReply.trim(),
@@ -244,7 +261,7 @@ app.post(
           console.log(`[AutoTitler] Generated: "${smartTitle}"`);
           conversation.title = smartTitle;
         } catch (titleErr) {
-          console.warn('[AutoTitler] Title generation failed, using fallback:', titleErr);
+          console.warn('[AutoTitler] Generation fallback triggered:', titleErr);
           conversation.title = prompt.trim().slice(0, 30);
         }
       }
@@ -252,7 +269,7 @@ app.post(
       await conversation.save();
       res.end();
     } catch (error: any) {
-      console.error('Chat streaming error:', error?.message || error);
+      console.error('Chat error:', error?.message || error);
 
       if (!res.headersSent) {
         res.status(500).json({

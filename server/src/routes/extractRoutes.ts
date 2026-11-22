@@ -76,4 +76,32 @@ router.get("/extractions", async (_req: Request, res: Response): Promise<void> =
   }
 });
 
+// DELETE /api/extractions/:id - Delete an extraction record
+router.delete("/extractions/:id", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const deleted = await Extraction.findByIdAndDelete(id);
+
+    if (!deleted) {
+      res.status(404).json({
+        success: false,
+        error: "Extraction not found.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Extraction deleted successfully.",
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal Server Error";
+    console.error("Error deleting extraction:", message);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete extraction.",
+    });
+  }
+});
+
 export default router;
